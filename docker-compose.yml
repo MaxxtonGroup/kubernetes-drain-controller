@@ -1,0 +1,30 @@
+version: '3'
+services:
+  compiler:
+    image: metrics-service:dev
+    build: .
+    volumes:
+      - ./dist:/app/dist
+      - ./src:/app/src:ro
+      - ./tsconfig.json:/app/tsconfig.json
+    command:
+      - yarn
+      - run
+      - watch
+  nodemon:
+    image: metrics-service:dev
+    build: .
+    volumes:
+      - ./dist:/app/dist
+      - ~/.kube:/root/.kube:ro
+    command:
+      - ./node_modules/.bin/nodemon
+      - --inspect=9000
+      - dist/index.js
+    ports:
+      - '8000:8080'
+      - '9000:9000'
+    environment:
+      - 'LOGGER_LEVEL=debug'
+    depends_on:
+      - compiler

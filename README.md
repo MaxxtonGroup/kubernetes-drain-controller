@@ -1,10 +1,10 @@
-# openshift-drain-controller
+# kubernetes-drain-controller
 
-This controller drains pods from an unschedulable or not ready Openshift node.
+This controller drains pods from an unschedulable or not ready Kubernetes node.
 
 ## Build
 ```bash
-docker build -t openshift-drain-controller .
+docker build -t kubernetes-drain-controller .
 ```
 
 ## Develop with Docker

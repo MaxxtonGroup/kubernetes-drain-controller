@@ -1,10 +1,10 @@
 
+import * as express from "express";
 import { createExpressServer, useContainer } from "routing-controllers";
 import { Container } from "typedi";
 import * as winston from "winston";
 import { web } from "./property-keys";
 import { Settings } from "./settings";
-import * as express from "express";
 
 /**
  * Configure the HTTP server

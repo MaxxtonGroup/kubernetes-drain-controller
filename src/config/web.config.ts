@@ -21,7 +21,7 @@ export class WebConfig {
 
     // Health check
     app.get("/health", (req: express.Request, resp: express.Response) => {
-      resp.sendStatus(200).send("ok");
+      resp.send("ok");
     });
 
     // run express application

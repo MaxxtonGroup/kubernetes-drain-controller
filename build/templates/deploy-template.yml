@@ -86,13 +86,11 @@ objects:
             br-ticketnumber: ${TAG}
         spec:
           containers:
-            - env: []
-              name: ${ORIGINAL_NAME}
-              image: >-
-                ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
-              ports:
+            - ports:
                 - containerPort: 8080
                   protocol: TCP
+              image: >-
+                ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
               terminationMessagePath: /dev/termination-log
               imagePullPolicy: IfNotPresent
               readinessProbe:

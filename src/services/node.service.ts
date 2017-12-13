@@ -57,11 +57,15 @@ export class NodeService {
           }, error => {
             winston.error(error);
           }, () => {
-            this.watchNodes();
+            setTimeout(() => {
+              this.watchNodes();
+            }, 1000);
           });
       }, error => {
         winston.error(error);
-        this.watchNodes();
+        setTimeout(() => {
+          this.watchNodes();
+        }, 1000);
       });
   }
 

@@ -86,7 +86,9 @@ objects:
             br-ticketnumber: ${TAG}
         spec:
           containers:
-            - image: >-
+            - env: []
+              name: ${ORIGINAL_NAME}
+              image: >-
                 ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
               ports:
                 - containerPort: 8080

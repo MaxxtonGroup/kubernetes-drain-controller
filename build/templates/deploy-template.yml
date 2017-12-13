@@ -123,4 +123,5 @@ objects:
           terminationGracePeriodSeconds: 30
           dnsPolicy: ClusterFirst
           securityContext: {}
+          serviceAccount: kubernetes-drainer
 

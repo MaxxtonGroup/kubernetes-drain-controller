@@ -86,20 +86,7 @@ objects:
             br-ticketnumber: ${TAG}
         spec:
           containers:
-            - env:
-              - name: SCRAPER_JENKINS_URL
-                value: 'https://jenkins-mxts.maxxton.com'
-              - name: SCRAPER_JENKINS_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    key: password
-                    name: jenkins-api
-              - name: SCRAPER_JENKINS_USERNAME
-                valueFrom:
-                  secretKeyRef:
-                    key: username
-                    name: jenkins-apiname: ${NAME}
-              image: >-
+            - image: >-
                 ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
               ports:
                 - containerPort: 8080

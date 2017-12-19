@@ -86,24 +86,12 @@ objects:
             br-ticketnumber: ${TAG}
         spec:
           containers:
-            - env:
-              - name: SCRAPER_JENKINS_URL
-                value: 'https://jenkins-mxts.maxxton.com'
-              - name: SCRAPER_JENKINS_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    key: password
-                    name: jenkins-api
-              - name: SCRAPER_JENKINS_USERNAME
-                valueFrom:
-                  secretKeyRef:
-                    key: username
-                    name: jenkins-apiname: ${NAME}
-              image: >-
-                ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
-              ports:
+            - ports:
                 - containerPort: 8080
                   protocol: TCP
+              name: kubernetes-drain-controller
+              image: >-
+                ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
               terminationMessagePath: /dev/termination-log
               imagePullPolicy: IfNotPresent
               readinessProbe:
@@ -136,4 +124,5 @@ objects:
           terminationGracePeriodSeconds: 30
           dnsPolicy: ClusterFirst
           securityContext: {}
+          serviceAccount: kubernetes-drainer
 

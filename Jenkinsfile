@@ -199,23 +199,6 @@ pipeline {
             }
             def dcName = info.pr != null ? "${info.name}-${tag}" : info.name;
 
-            // Prepare config
-            def configParams = map([
-                NAME         : dcName,
-                ORIGINAL_NAME: info.name,
-                TAG          : tag
-            ])
-            if (info.pr) {
-              configParams.BB_PROJECT = info.pr.bitbucketProject
-              configParams.BB_REPO = info.pr.bitbucketRepo
-              configParams.BB_PR = info.pr.bitbucketPullRequestId
-            }
-            sh "oc whoami"
-            sh "oc project"
-            ocCreateTemplate("build/templates/configmap-${deployEnv}-template.yml", ocProject, configParams);
-            sh "oc whoami"
-            sh "oc project"
-
             // Prepare deployment
             def params = map([
                 NAME           : dcName,

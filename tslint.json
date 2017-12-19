@@ -10,6 +10,10 @@
     "no-console": true,
     "radix": false,
     "no-shadowed-variable": false,
-    "arrow-parens": false
+    "arrow-parens": false,
+    "variable-name": [true, "ban-keywords", "check-format", "allow-leading-underscore"],
+    "no-implicit-dependencies": [true, "dev"],
+    "no-submodule-imports": false,
+    "prefer-const": false
   }
 }

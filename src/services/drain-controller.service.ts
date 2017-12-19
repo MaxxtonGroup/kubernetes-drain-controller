@@ -22,6 +22,9 @@ export class DrainControllerService {
   private _remainingPods: number;
   private callbacks: Array<(dc: DrainControllerService) => void> = [];
 
+  private pollInterval = 1000;
+  private gracePeriod = 300000; // 5 minutes
+
   constructor(node: Node, rc: ReplicaController, private kubeClient: KubeClient) {
     this._node = node;
     this._rc = rc;
@@ -59,17 +62,26 @@ export class DrainControllerService {
     this._status = DrainControllerStatus.Pending;
   }
 
+  /**
+   * Register callback for onUpdate
+   * @param {(dc: DrainControllerService) => void} callback
+   */
   public onUpdate(callback: ((dc: DrainControllerService) => void)): void {
     this.callbacks.push(callback);
   }
 
+  /**
+   * Drain pods from node
+   * @returns {Promise<void>}
+   */
   public async drainPods(): Promise<void> {
     this._status = DrainControllerStatus.Running;
     winston.info(`drain replica-controller ${this.rc.metadata.namespace}/${this.rc.metadata.name}`);
     try {
-      await this.scaleUp().toPromise();
+      await this.scaleUp();
+      await this.waitScaleUp();
       await this.waitForPodDeleted();
-      await this.scaleDown().toPromise();
+      await this.scaleDown();
       winston.info(`drain complete replica-controller ${this.rc.metadata.namespace}/${this.rc.metadata.name}`);
       this._status = DrainControllerStatus.Done;
 
@@ -83,47 +95,123 @@ export class DrainControllerService {
     }
   }
 
-  private scaleUp(): Observable<any> {
+  /**
+   * Scaleup replica-controller by 1 instance
+   * @returns {Observable<any>}
+   */
+  private scaleUp(): Promise<any> {
     let newReplicas = this._originalReplicas + 1;
     winston.info(`Scale rc ${this.rc.metadata.namespace}/${this.rc.metadata.name} to ${newReplicas}`);
     if (this.rc.metadata.annotations && this.rc.metadata.annotations["openshift.io/deployment-config.name"]) {
       return this.kubeClient.scaleDeploymentConfig(this.rc.metadata.namespace,
         this.rc.metadata.annotations["openshift.io/deployment-config.name"], newReplicas)
-        .retry(3);
+        .retry(3).toPromise();
     } else {
       return this.kubeClient.scaleReplicaControllers(this.rc.metadata.namespace, this.rc.metadata.name, newReplicas)
-        .retry(3);
+        .retry(3).toPromise();
     }
   }
 
-  private scaleDown(): Observable<any> {
+  /**
+   * Wait for the replica-controller to scale up to at least 2 instances
+   * @returns {Promise<any>}
+   */
+  private waitScaleUp(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      let checkScaleStatus = () => {
+        this.kubeClient.getReplicaController(this.rc.metadata.namespace, this.rc.metadata.name)
+          .subscribe(rc => {
+            if (rc.status.readyReplicas >= 2) {
+              resolve();
+            }
+          }, error => {
+            winston.error(error);
+            setTimeout(() => checkScaleStatus(), this.pollInterval);
+          });
+      };
+    });
+
+  }
+
+  /**
+   * Scale down replica-controller to original replicas
+   * @returns {Promise<any>}
+   */
+  private scaleDown(): Promise<any> {
     let newReplicas = this._originalReplicas;
     winston.info(`Scale rc ${this.rc.metadata.namespace}/${this.rc.metadata.name} to ${newReplicas}`);
     if (this.rc.metadata.annotations && this.rc.metadata.annotations["openshift.io/deployment-config.name"]) {
       return this.kubeClient.scaleDeploymentConfig(this.rc.metadata.namespace,
         this.rc.metadata.annotations["openshift.io/deployment-config.name"], newReplicas)
-        .retry(3);
+        .retry(3).toPromise();
     } else {
       return this.kubeClient.scaleReplicaControllers(this.rc.metadata.namespace, this.rc.metadata.name, newReplicas)
-        .retry(3);
+        .retry(3).toPromise();
     }
   }
 
+  /**
+   * Wait for the pods to be deleted.
+   * If it is not deleted within the grace period, it will be removed with force.
+   * @returns {Promise<any>}
+   */
   private waitForPodDeleted(): Promise<any> {
-    let promises: Array<Promise<Pod>> = this.pods.map(pod => {
-      return new Promise((resolve, reject) => {
-        this.kubeClient.watchPod(pod.metadata.namespace, pod.metadata.name)
-          .filter(update => {
-            return update.type && update.type === "DELETED";
-          })
-          .subscribe(update => {
-            resolve(update.object);
-          }, error => reject(error));
-      });
-    });
-    return Promise.all(promises);
-  }
+    return new Promise((resolve, reject) => {
+      // Watch pods for deletes
+      let checkPodExists = () => {
+        let podsExists = this.pods.map(pod => {
+          return { name: pod.metadata.name, namespace: pod.metadata.namespace };
+        });
 
+        Promise.all(this.pods.map(pod => {
+          return new Promise((res, rej) => {
+            this.kubeClient.getPod(pod.metadata.namespace, pod.metadata.name)
+              .subscribe(p => {
+                if (p.status.phase !== "Running") {
+                  res();
+                } else {
+                  rej();
+                }
+              }, error => {
+                winston.warn(error);
+                res();
+              });
+          });
+        })).then(() => {
+          this._remainingPods = 0;
+          resolve();
+        }, error => {
+          setTimeout(() => checkPodExists(), this.pollInterval);
+        });
+      };
+
+      // Forced delete the pod after a grace period
+      let deleteAfterGracePeriod = () => {
+        setTimeout(() => {
+          this.pods.forEach(pod => {
+            this.kubeClient.getPod(pod.metadata.namespace, pod.metadata.name)
+              .subscribe(() => {
+                // Pod still exists
+                winston.warn(`Delete pod ${pod.metadata.namespace}/${pod.metadata.namespace} ` +
+                  `from node ${this.node.metadata.name}`);
+                this.kubeClient.deletePod(pod.metadata.namespace, pod.metadata.name)
+                  .subscribe(() => {
+                    // done
+                  }, error => {
+                    // Log and retry
+                    winston.error(error);
+                    deleteAfterGracePeriod();
+                  });
+              }, error => {
+                winston.warn(error);
+                resolve();
+              });
+          });
+        }, this.gracePeriod);
+      };
+      deleteAfterGracePeriod();
+    });
+  }
 }
 
 export enum DrainControllerStatus {

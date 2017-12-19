@@ -28,12 +28,33 @@ export class KubeClient {
    * @returns {Observable<any>}
    */
   public get<T>(uri: string, options?: { watch?: boolean }): Observable<T> {
+    return this.request<T>("get", uri, options);
+  }
+
+  /**
+   * Delete a resource
+   * @param {string} uri
+   * @param options
+   * @returns {Observable<any>}
+   */
+  public delete<T>(uri: string, options?: {}): Observable<T> {
+    return this.request<T>("delete", uri, options);
+  }
+
+  /**
+   * Get or watch resource
+   * @param method
+   * @param {string} uri
+   * @param options
+   * @returns {Observable<any>}
+   */
+  public request<T>(method: string, uri: string, options?: { watch?: boolean }): Observable<T> {
     return Observable.create(observer => {
       let url = `${uri}?${options && options.watch ? "watch" : ""}`;
-      winston.debug(`GET ${url}`);
+      winston.debug(`${method} ${url}`);
 
       const jsonStream = new JSONStream();
-      request.get(url, this.requestOptions)
+      request[method](url, this.requestOptions)
         .on("response", response => {
           if (response.statusCode >= 400) {
             observer.error("Kubernetes responded with status " + response.statusCode + " " + response.statusMessage);
@@ -123,12 +144,38 @@ export class KubeClient {
   }
 
   /**
+   * Get a pod
+   * @returns {Observable<Pod>}
+   */
+  public getPod(namespace: string, name: string): Observable<Pod> {
+    return this.get<any>(`/api/v1/namespaces/${namespace}/pods/${name}`)
+      .map(nodeList => nodeList as Pod);
+  }
+
+  /**
+   * Delete a pod
+   * @returns {Observable<Pod>}
+   */
+  public deletePod(namespace: string, name: string): Observable<Pod> {
+    return this.delete<any>(`/api/v1/namespaces/${namespace}/pods/${name}`);
+  }
+
+  /**
    * Get all pods
    * @returns {Observable<Pod[]>}
    */
   public watchPod(namespace: string, name: string): Observable<Watch<Pod>> {
     return this.get<any>(`/api/v1/namespaces/${namespace}/pods/${name}`, { watch: true})
       .map(nodeList => nodeList as Watch<Pod>);
+  }
+
+  /**
+   * Get a replica-controller
+   * @returns {Observable<ReplicaController>}
+   */
+  public getReplicaController(namespace: string, name: string): Observable<ReplicaController> {
+    return this.get<any>(`/api/v1/namespaces/${namespace}/replicationcontrollers/${name}`)
+      .map(nodeList => nodeList as ReplicaController);
   }
 
   /**

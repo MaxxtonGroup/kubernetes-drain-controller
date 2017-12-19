@@ -89,6 +89,7 @@ objects:
             - ports:
                 - containerPort: 8080
                   protocol: TCP
+              name: kubernetes-drain-controller
               image: >-
                 ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
               terminationMessagePath: /dev/termination-log

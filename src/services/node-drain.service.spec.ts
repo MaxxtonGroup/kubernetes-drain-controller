@@ -46,7 +46,9 @@ describe("NodeDrainService", () => {
       }
     };
 
-    let mockClient = MockKubeClient.build();
+    let mockClient = MockKubeClient
+      .patch("/api/v1/nodes/slave01").responseBody({})
+      .build();
 
     let nodeDrainService = new NodeDrainService(mockClient);
 
@@ -84,6 +86,7 @@ describe("NodeDrainService", () => {
     });
 
     let mockClient = MockKubeClient
+      .patch("/api/v1/nodes/slave01").responseBody({})
       .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
@@ -154,6 +157,7 @@ describe("NodeDrainService", () => {
     });
 
     let mockClient = MockKubeClient
+      .patch("/api/v1/nodes/slave01").responseBody({})
       .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
@@ -251,6 +255,7 @@ describe("NodeDrainService", () => {
     });
 
     let mockClient = MockKubeClient
+      .patch("/api/v1/nodes/slave01").responseBody({})
       .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",

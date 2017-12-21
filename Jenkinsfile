@@ -98,7 +98,7 @@ pipeline {
 
               def parentRefs = sh(returnStdout: true, script: "git log --pretty=%p -n 1").trim().split(" ")
               if (parentRefs.length >= 2) {
-                sh "oc tag ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash} ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${parentRefs[0]}-${parentRefs[1]}${postFix}"
+                sh "oc tag ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash} ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${parentRefs[0]}-${parentRefs[1]}"
               }
             } else {
               // Promote

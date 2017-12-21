@@ -230,7 +230,7 @@ export class NodeDrainService {
         await this.kubeClient.patchNode(node.metadata.name, patch).toPromise();
         break;
       } catch (e) {
-        winston.error(`Failed to patch node ${node.metadata.name}`);
+        winston.error(`Failed to patch node ${node.metadata.name}`, e);
       }
     }
   }

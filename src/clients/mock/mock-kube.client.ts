@@ -20,7 +20,7 @@ export class MockKubeClient extends KubeClient {
   }
 
   public static patch(uri: string, watch: boolean = false): RequestMockBuilder {
-    return new MockKubeClientBuilder().delete(uri, watch);
+    return new MockKubeClientBuilder().patch(uri, watch);
   }
 
   public static build(): MockKubeClient {

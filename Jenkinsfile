@@ -26,7 +26,7 @@ pipeline {
     JIRA_FIELD_FIX_COMPONENT_VERSION = "customfield_12331"
 
     // Openshift clusters
-    DOCKER_REGISTRY_INTERNAL = "172.30.226.108:5000"
+    DOCKER_REGISTRY_INTERNAL = "172.30.35.250:5000"
     DOCKER_REGISTRY_DEVELOP = "docker-dev.maxxton.com"
     OPENSHIFT_DEVELOP_PROJECT = "mxtu"
 

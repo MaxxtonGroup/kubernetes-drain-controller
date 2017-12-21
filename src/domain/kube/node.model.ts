@@ -6,9 +6,9 @@ export interface Node extends ApiModel<NodeSpec, NodeStatus> {
 
 export interface NodeSpec extends SpecModel {
 
-  podCIDR: string;
-  providerID: string;
-  externalID: string;
+  podCIDR?: string;
+  providerID?: string;
+  externalID?: string;
   unschedulable: boolean;
 
 }

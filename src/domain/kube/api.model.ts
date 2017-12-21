@@ -4,23 +4,15 @@ export interface ApiModel<SPEC extends SpecModel, STATUS extends StatusModel> {
 
   metadata: Metadata;
   spec: SPEC;
-  status: STATUS;
+  status?: STATUS;
 
 }
 
 export interface SpecModel {
 
-  replicas: number;
-  selector: { [key: string]: string };
-
 }
 
 export interface StatusModel {
-
-  replicas: number;
-  fullyLabeledReplicas: number;
-  readyReplicas: number;
-  availableReplicas: number;
 
 }
 

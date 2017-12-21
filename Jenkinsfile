@@ -205,7 +205,7 @@ pipeline {
                 ORIGINAL_NAME  : info.name,
                 TAG            : tag,
                 NAMESPACE      : ocProject,
-                DOCKER_REGISTRY: deployEnv == "dev" ? env.DOCKER_REGISTRY_DEVELOP : env.DOCKER_REGISTRY_PRODUCTION
+                DOCKER_REGISTRY: deployEnv == "dev" ? env.DOCKER_REGISTRY_INTERNAL : env.DOCKER_REGISTRY_PRODUCTION
             ])
             if (info.pr) {
               params.BB_PROJECT = info.pr.bitbucketProject

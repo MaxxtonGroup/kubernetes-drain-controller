@@ -314,7 +314,7 @@ export class NodeDrainService {
    */
   private async scaleDownNode(node: Node): Promise<void> {
     let nodeAnnotation = this.getNodeAnnotation(node);
-    if (nodeAnnotation.deploymentConfigs) {
+    if (nodeAnnotation.deploymentConfigs && nodeAnnotation.deploymentConfigs.length > 0) {
       let promises = nodeAnnotation.deploymentConfigs
         .map(dc => {
           dc.desired = dc.original;
@@ -322,9 +322,9 @@ export class NodeDrainService {
           return this.kubeClient.scaleDeploymentConfig(dc.namespace, dc.name, dc.original).toPromise();
         });
       await Promise.all(promises);
+      nodeAnnotation.deploymentConfigs = [];
+      await this.saveAnnotations(node, nodeAnnotation);
     }
-    nodeAnnotation.deploymentConfigs = [];
-    await this.saveAnnotations(node, nodeAnnotation);
   }
 
   /**

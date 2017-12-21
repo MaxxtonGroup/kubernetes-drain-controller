@@ -200,6 +200,10 @@ pipeline {
             def dcName = info.pr != null ? "${info.name}-${tag}" : info.name;
 
             // Prepare deployment
+            sh "oc create sa kubernetes-drainer -n ${ocProject}"
+            sh "oc adm policy add-cluster-role-to-user system:node -z kubernetes-drainer -n ${ocProject}"
+            sh "oc adm policy add-cluster-role-to-user edit -z kubernetes-drainer -n ${ocProject}"
+
             def params = map([
                 NAME           : dcName,
                 ORIGINAL_NAME  : info.name,

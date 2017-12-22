@@ -153,8 +153,8 @@ pipeline {
 
             // Pull image from develop
             def username = "${OPENSHIFT_DEVELOP_PROJECT}/jenkins"
-            def token = sh (script: "oc whoami -t", returnStdout: true).trim()
-            retry(5){
+            def token = sh(script: "oc whoami -t", returnStdout: true).trim()
+            retry(5) {
               sleep 3
               sh "docker login -u ${username} -p ${token} ${DOCKER_REGISTRY_DEVELOP}"
               sh "docker pull ${DOCKER_REGISTRY_DEVELOP}/${OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash}"
@@ -163,9 +163,9 @@ pipeline {
             // Push image to production
             def ocProject = ocLogin()
             remoteUsername = "${ocProject}/remote-deployer"
-            remoteToken = sh (script: "oc whoami -t", returnStdout: true).trim()
+            remoteToken = sh(script: "oc whoami -t", returnStdout: true).trim()
             sh "docker tag ${DOCKER_REGISTRY_DEVELOP}/${OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash} ${DOCKER_REGISTRY_PRODUCTION}/${ocProject}/${info.name}:${commitHash}"
-            retry(5){
+            retry(5) {
               sleep 3
               sh "docker login -u ${remoteUsername} -p ${remoteToken} ${DOCKER_REGISTRY_PRODUCTION}"
               sh "docker push ${DOCKER_REGISTRY_PRODUCTION}/${ocProject}/${info.name}:${commitHash}"
@@ -200,9 +200,12 @@ pipeline {
             def dcName = info.pr != null ? "${info.name}-${tag}" : info.name;
 
             // Prepare deployment
-            sh "oc create sa kubernetes-drainer -n ${ocProject}"
-            sh "oc adm policy add-cluster-role-to-user system:node -z kubernetes-drainer -n ${ocProject}"
-            sh "oc adm policy add-cluster-role-to-user edit -z kubernetes-drainer -n ${ocProject}"
+            try {
+              sh "oc create sa kubernetes-drainer -n ${ocProject}"
+              sh "oc adm policy add-cluster-role-to-user system:node -z kubernetes-drainer -n ${ocProject}"
+              sh "oc adm policy add-cluster-role-to-user edit -z kubernetes-drainer -n ${ocProject}"
+            } catch (e) {
+            }
 
             def params = map([
                 NAME           : dcName,

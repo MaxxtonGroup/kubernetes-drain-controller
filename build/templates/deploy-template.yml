@@ -48,15 +48,11 @@ objects:
     spec:
       replicas: 1
       strategy:
-          type: Rolling
-          rollingParams:
-            updatePeriodSeconds: 1
-            intervalSeconds: 1
-            timeoutSeconds: 600
-            maxUnavailable: 25%
-            maxSurge: 25%
-          resources: {}
           activeDeadlineSeconds: 21600
+          recreateParams:
+            timeoutSeconds: 600
+          resources: {}
+          type: Recreate
       selector:
         app: ${NAME}
         mxts.service: ${ORIGINAL_NAME}
@@ -89,7 +85,7 @@ objects:
             - ports:
                 - containerPort: 8080
                   protocol: TCP
-              name: kubernetes-drain-controller
+              name: ${NAME}
               image: >-
                 ${DOCKER_REGISTRY}/${NAMESPACE}/${ORIGINAL_NAME}:${TAG}
               terminationMessagePath: /dev/termination-log

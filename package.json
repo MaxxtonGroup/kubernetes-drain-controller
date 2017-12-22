@@ -1,7 +1,7 @@
 {
   "name": "kubernetes-drain-controller",
   "version": "0.1.0",
-  "description": "Kubernetes controller to drain a node without downtime",
+  "description": "Kubernetes controller to drainnot high available pods from a Kubernetes node in a safe manner",
   "main": "dist/index.js",
   "repository": "ssh://git@stash.maxxton.com:7999/mxtu/kubernetes-drain-controller.git",
   "author": "S. Hermans <s.hermans@maxxton.com>",

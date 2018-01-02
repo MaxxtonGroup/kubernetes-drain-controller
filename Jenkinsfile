@@ -26,7 +26,7 @@ pipeline {
     JIRA_FIELD_FIX_COMPONENT_VERSION = "customfield_12331"
 
     // Openshift clusters
-    DOCKER_REGISTRY_INTERNAL = "172.30.226.108:5000"
+    DOCKER_REGISTRY_INTERNAL = "172.30.35.250:5000"
     DOCKER_REGISTRY_DEVELOP = "docker-dev.maxxton.com"
     OPENSHIFT_DEVELOP_PROJECT = "mxtu"
 
@@ -98,7 +98,7 @@ pipeline {
 
               def parentRefs = sh(returnStdout: true, script: "git log --pretty=%p -n 1").trim().split(" ")
               if (parentRefs.length >= 2) {
-                sh "oc tag ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash} ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${parentRefs[0]}-${parentRefs[1]}${postFix}"
+                sh "oc tag ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash} ${env.OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${parentRefs[0]}-${parentRefs[1]}"
               }
             } else {
               // Promote
@@ -153,8 +153,8 @@ pipeline {
 
             // Pull image from develop
             def username = "${OPENSHIFT_DEVELOP_PROJECT}/jenkins"
-            def token = sh (script: "oc whoami -t", returnStdout: true).trim()
-            retry(5){
+            def token = sh(script: "oc whoami -t", returnStdout: true).trim()
+            retry(5) {
               sleep 3
               sh "docker login -u ${username} -p ${token} ${DOCKER_REGISTRY_DEVELOP}"
               sh "docker pull ${DOCKER_REGISTRY_DEVELOP}/${OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash}"
@@ -163,9 +163,9 @@ pipeline {
             // Push image to production
             def ocProject = ocLogin()
             remoteUsername = "${ocProject}/remote-deployer"
-            remoteToken = sh (script: "oc whoami -t", returnStdout: true).trim()
+            remoteToken = sh(script: "oc whoami -t", returnStdout: true).trim()
             sh "docker tag ${DOCKER_REGISTRY_DEVELOP}/${OPENSHIFT_DEVELOP_PROJECT}/${info.name}:${commitHash} ${DOCKER_REGISTRY_PRODUCTION}/${ocProject}/${info.name}:${commitHash}"
-            retry(5){
+            retry(5) {
               sleep 3
               sh "docker login -u ${remoteUsername} -p ${remoteToken} ${DOCKER_REGISTRY_PRODUCTION}"
               sh "docker push ${DOCKER_REGISTRY_PRODUCTION}/${ocProject}/${info.name}:${commitHash}"
@@ -199,30 +199,20 @@ pipeline {
             }
             def dcName = info.pr != null ? "${info.name}-${tag}" : info.name;
 
-            // Prepare config
-            def configParams = map([
-                NAME         : dcName,
-                ORIGINAL_NAME: info.name,
-                TAG          : tag
-            ])
-            if (info.pr) {
-              configParams.BB_PROJECT = info.pr.bitbucketProject
-              configParams.BB_REPO = info.pr.bitbucketRepo
-              configParams.BB_PR = info.pr.bitbucketPullRequestId
-            }
-            sh "oc whoami"
-            sh "oc project"
-            ocCreateTemplate("build/templates/configmap-${deployEnv}-template.yml", ocProject, configParams);
-            sh "oc whoami"
-            sh "oc project"
-
             // Prepare deployment
+            try {
+              sh "oc create sa kubernetes-drainer -n ${ocProject}"
+              sh "oc adm policy add-cluster-role-to-user system:node -z kubernetes-drainer -n ${ocProject}"
+              sh "oc adm policy add-cluster-role-to-user edit -z kubernetes-drainer -n ${ocProject}"
+            } catch (e) {
+            }
+
             def params = map([
                 NAME           : dcName,
                 ORIGINAL_NAME  : info.name,
                 TAG            : tag,
                 NAMESPACE      : ocProject,
-                DOCKER_REGISTRY: deployEnv == "dev" ? env.DOCKER_REGISTRY_DEVELOP : env.DOCKER_REGISTRY_PRODUCTION
+                DOCKER_REGISTRY: deployEnv == "dev" ? env.DOCKER_REGISTRY_INTERNAL : env.DOCKER_REGISTRY_PRODUCTION
             ])
             if (info.pr) {
               params.BB_PROJECT = info.pr.bitbucketProject

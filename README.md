@@ -1,6 +1,14 @@
 # kubernetes-drain-controller
 
-This controller drains pods from an unschedulable or not ready Kubernetes node.
+This controller drains not high available pods from an unschedulable Kubernetes node in a safe manner.
+It always wants to have at least 1 replica available. 
+
+**Note**: currently only drains pods of DeploymentConfig's in Openshift
+
+## Deploy In Openshift
+```bash
+oc new-app --docker-image=maxxton/kubernetes-drain-controller --name=drain-controller
+```
 
 ## Build
 ```bash
@@ -14,5 +22,6 @@ docker-compose up --build
 
 ## Develop without Docker
 ```bash
-yarn run watch & yarn run debug
+yarn run watch
+yarn run debug
 ```

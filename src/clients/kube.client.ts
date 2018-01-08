@@ -54,7 +54,8 @@ export abstract class KubeClient {
       {
         json: false,
         body: JSON.stringify(patchObject),
-        headers: { "Content-Type": "application/merge-patch+json" } });
+        headers: { "Content-Type": "application/merge-patch+json" }
+      });
   }
 
   /**
@@ -218,6 +219,9 @@ export abstract class KubeClient {
       let url = `/api/v1/namespaces/${namespace}/replicationcontrollers/${rcName}/scale`;
       this.get<ReplicaController>(url)
         .subscribe(rc => {
+          if (!rc.spec) {
+            rc.spec = {};
+          }
           rc.spec.replicas = replicas;
           this.put<ReplicaController>(url, rc)
             .subscribe(rc2 => {
@@ -240,6 +244,9 @@ export abstract class KubeClient {
       let url = `/oapi/v1/namespaces/${namespace}/deploymentconfigs/${dcName}/scale`;
       this.get<DeploymentConfig>(url)
         .subscribe(rc => {
+          if (!rc.spec) {
+            rc.spec = {};
+          }
           rc.spec.replicas = replicas;
           this.put<ReplicaController>(url, rc)
             .subscribe(rc2 => {

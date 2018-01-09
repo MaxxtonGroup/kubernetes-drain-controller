@@ -6,8 +6,8 @@ export interface ReplicaController extends ApiModel<ReplicaControllerSpec, Repli
 
 export interface ReplicaControllerSpec extends SpecModel {
 
-  replicas: number;
-  selector: { [key: string]: string };
+  replicas?: number;
+  selector?: { [key: string]: string };
 
 }
 

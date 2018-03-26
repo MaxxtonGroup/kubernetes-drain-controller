@@ -6,7 +6,7 @@ export interface DeploymentConfig extends ApiModel<DeploymentConfigSpec, Deploym
 
 export interface DeploymentConfigSpec extends SpecModel {
 
-  replicas: number;
+  replicas?: number;
 
 }
 

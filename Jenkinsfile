@@ -30,9 +30,9 @@ pipeline {
     DOCKER_REGISTRY_DEVELOP = "docker-dev.maxxton.com"
     OPENSHIFT_DEVELOP_PROJECT = "mxtu"
 
-    DOCKER_REGISTRY_PRODUCTION = "docker-prod.maxxton.com"
-    OPENSHIFT_PRODUCTION_API = "https://mxt-ocmaster.newyse.maxxton:8443"
-    OPENSHIFT_PRODUCTION_TOKEN = credentials("openshift_mxtu_prod_token")
+    DOCKER_REGISTRY_PRODUCTION = "docker-prod02.maxxton.com"
+    OPENSHIFT_PRODUCTION_API = "https://mxt-oso-master.newyse.maxxton:8443"
+    OPENSHIFT_PRODUCTION_TOKEN = credentials("openshift02_default_prod_token")
     OPENSHIFT_PRODUCTION_PROJECT = "mxtu"
   }
   stages {

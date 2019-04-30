@@ -8,6 +8,8 @@ describe("NodeDrainService", () => {
   it("Cordon empty node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01"
       },
@@ -38,6 +40,8 @@ describe("NodeDrainService", () => {
   it("Uncordon empty node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01"
       },
@@ -66,6 +70,8 @@ describe("NodeDrainService", () => {
   it("Scale Down pod on schedulable node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01",
         annotations: {}
@@ -75,8 +81,11 @@ describe("NodeDrainService", () => {
       }
     };
     node.metadata.annotations[NodeDrainService.ANNOTATION_NAME] = JSON.stringify({
-      deploymentConfigs: [
+      controllers: [
         {
+          apiVersion: "apps.openshift.io/v1",
+          kind: "DeploymentConfig",
+          resourceName: "deploymentconfigs",
           name: "customer-service",
           namespace: "my-project",
           original: 1,
@@ -87,7 +96,7 @@ describe("NodeDrainService", () => {
 
     let mockClient = MockKubeClient
       .patch("/api/v1/nodes/slave01").responseBody({})
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -96,7 +105,7 @@ describe("NodeDrainService", () => {
           replicas: 2
         }
       })
-      .put("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .put("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -119,9 +128,11 @@ describe("NodeDrainService", () => {
           spec: {
             replicas: 1
           }
-        }, mockClient.bodyOf("put", "/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
+        }, mockClient.bodyOf("put",
+          "/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
         done();
       } catch (e) {
+        mockClient.dump();
         done(e);
       }
     }, error => done(error));
@@ -130,6 +141,8 @@ describe("NodeDrainService", () => {
   it("Scale Down multiple pods on schedulable node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01",
         annotations: {}
@@ -139,8 +152,11 @@ describe("NodeDrainService", () => {
       }
     };
     node.metadata.annotations[NodeDrainService.ANNOTATION_NAME] = JSON.stringify({
-      deploymentConfigs: [
+      controllers: [
         {
+          apiVersion: "apps.openshift.io/v1",
+          kind: "DeploymentConfig",
+          resourceName: "deploymentconfigs",
           name: "customer-service",
           namespace: "my-project",
           original: 1,
@@ -148,6 +164,9 @@ describe("NodeDrainService", () => {
           pods: ["customer-service-12-abcd"]
         },
         {
+          apiVersion: "apps.openshift.io/v1",
+          kind: "DeploymentConfig",
+          resourceName: "deploymentconfigs",
           name: "order-service",
           namespace: "my-test",
           original: 2,
@@ -158,7 +177,7 @@ describe("NodeDrainService", () => {
 
     let mockClient = MockKubeClient
       .patch("/api/v1/nodes/slave01").responseBody({})
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -167,7 +186,7 @@ describe("NodeDrainService", () => {
           replicas: 2
         }
       })
-      .put("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .put("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -176,7 +195,7 @@ describe("NodeDrainService", () => {
           replicas: 1
         },
       })
-      .get("/oapi/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
         metadata: {
           name: "order-service",
           namespace: "my-test"
@@ -185,7 +204,7 @@ describe("NodeDrainService", () => {
           replicas: 3
         }
       })
-      .put("/oapi/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
+      .put("/apis/apps.openshift.io/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
         metadata: {
           name: "order-service",
           namespace: "my-test"
@@ -208,7 +227,8 @@ describe("NodeDrainService", () => {
           spec: {
             replicas: 1
           }
-        }, mockClient.bodyOf("put", "/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
+        }, mockClient.bodyOf("put",
+          "/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
         assert.deepEqual({
           metadata: {
             name: "order-service",
@@ -217,7 +237,8 @@ describe("NodeDrainService", () => {
           spec: {
             replicas: 2
           }
-        }, mockClient.bodyOf("put", "/oapi/v1/namespaces/my-test/deploymentconfigs/order-service/scale"));
+        }, mockClient.bodyOf("put",
+          "/apis/apps.openshift.io/v1/namespaces/my-test/deploymentconfigs/order-service/scale"));
         done();
       } catch (e) {
         done(e);
@@ -228,6 +249,8 @@ describe("NodeDrainService", () => {
   it("Scale Down multiple pods on schedulable node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01",
         annotations: {}
@@ -237,8 +260,11 @@ describe("NodeDrainService", () => {
       }
     };
     node.metadata.annotations[NodeDrainService.ANNOTATION_NAME] = JSON.stringify({
-      deploymentConfigs: [
+      controllers: [
         {
+          apiVersion: "apps.openshift.io/v1",
+          kind: "DeploymentConfig",
+          resourceName: "deploymentconfigs",
           name: "customer-service",
           namespace: "my-project",
           original: 1,
@@ -246,6 +272,9 @@ describe("NodeDrainService", () => {
           pods: ["customer-service-12-abcd"]
         },
         {
+          apiVersion: "apps.openshift.io/v1",
+          kind: "DeploymentConfig",
+          resourceName: "deploymentconfigs",
           name: "order-service",
           namespace: "my-test",
           original: 2,
@@ -256,7 +285,7 @@ describe("NodeDrainService", () => {
 
     let mockClient = MockKubeClient
       .patch("/api/v1/nodes/slave01").responseBody({})
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -265,7 +294,7 @@ describe("NodeDrainService", () => {
           replicas: 2
         }
       })
-      .put("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .put("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -274,7 +303,7 @@ describe("NodeDrainService", () => {
           replicas: 1
         },
       })
-      .get("/oapi/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
         metadata: {
           name: "order-service",
           namespace: "my-test"
@@ -283,7 +312,7 @@ describe("NodeDrainService", () => {
           replicas: 3
         }
       })
-      .put("/oapi/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
+      .put("/apis/apps.openshift.io/v1/namespaces/my-test/deploymentconfigs/order-service/scale").responseBody({
         metadata: {
           name: "order-service",
           namespace: "my-test"
@@ -306,7 +335,8 @@ describe("NodeDrainService", () => {
           spec: {
             replicas: 1
           }
-        }, mockClient.bodyOf("put", "/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
+        }, mockClient.bodyOf("put",
+          "/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
         assert.deepEqual({
           metadata: {
             name: "order-service",
@@ -315,7 +345,8 @@ describe("NodeDrainService", () => {
           spec: {
             replicas: 2
           }
-        }, mockClient.bodyOf("put", "/oapi/v1/namespaces/my-test/deploymentconfigs/order-service/scale"));
+        }, mockClient.bodyOf("put",
+          "/apis/apps.openshift.io/v1/namespaces/my-test/deploymentconfigs/order-service/scale"));
         done();
       } catch (e) {
         done(e);
@@ -326,6 +357,8 @@ describe("NodeDrainService", () => {
   it("Scale up multiple pods on unschedulable node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01",
         annotations: {}
@@ -342,22 +375,134 @@ describe("NodeDrainService", () => {
             metadata: {
               name: "customer-service-12-abc",
               namespace: "my-project",
+              labels: {
+                app: "customer-service"
+              },
               annotations: {
                 "openshift.io/deployment-config.name": "customer-service"
-              }
+              },
+              ownerReferences: [
+                {
+                  apiVersion: "apps/v1",
+                  blockOwnerDeletion: true,
+                  controller: true,
+                  kind: "ReplicaSet",
+                  name: "customer-service-12",
+                }]
             }
           },
           {
             metadata: {
               name: "order-service-5-def",
               namespace: "my-test",
+              labels: {
+                app: "order-service"
+              },
               annotations: {
                 "openshift.io/deployment-config.name": "order-service"
+              },
+              ownerReferences: [
+                {
+                  apiVersion: "apps/v1",
+                  blockOwnerDeletion: true,
+                  controller: true,
+                  kind: "ReplicaSet",
+                  name: "order-service-5",
+                }]
+            }
+          }]
+      })
+      .get("/apis/apps/v1").responseBody({
+        resources: [
+          {
+            name: "replicasets",
+            namespaced: true,
+            kind: "ReplicaSet",
+            verbs: []
+          }]
+      })
+      .get("/apis/apps.openshift.io/v1").responseBody({
+        resources: [
+          {
+            name: "deploymentconfigs",
+            namespaced: true,
+            kind: "DeploymentConfig",
+            verbs: []
+          }]
+      })
+      .get("/apis/policy/v1beta1/namespaces/my-project/poddisruptionbudgets").responseBody({
+        items: [
+          {
+            apiVersion: "policy/v1beta1",
+            kind: "PodDisruptionBudget",
+            metadata: {
+              namespace: "my-project",
+              name: "customer-service"
+            },
+            spec: {
+              minAvailable: 1,
+              selector: {
+                matchLabels: {
+                  app: "customer-service"
+                }
               }
             }
           }]
       })
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service").responseBody({
+      .get("/apis/policy/v1beta1/namespaces/my-test/poddisruptionbudgets").responseBody({
+        items: [
+          {
+            apiVersion: "policy/v1beta1",
+            kind: "PodDisruptionBudget",
+            metadata: {
+              namespace: "my-test",
+              name: "order-service"
+            },
+            spec: {
+              minAvailable: 1,
+              selector: {
+                matchLabels: {
+                  app: "order-service"
+                }
+              }
+            }
+          }]
+      })
+      .get("/apis/apps/v1/namespaces/my-project/replicasets/customer-service-12").responseBody({
+        apiVersion: "apps/v1",
+        kind: "ReplicaSet",
+        metadata: {
+          name: "customer-service-12",
+          namespace: "my-project",
+          ownerReferences: [
+            {
+              apiVersion: "apps.openshift.io/v1",
+              blockOwnerDeletion: true,
+              controller: true,
+              kind: "DeploymentConfig",
+              name: "customer-service",
+            }]
+        }
+      })
+      .get("/apis/apps/v1/namespaces/my-test/replicasets/order-service-5").responseBody({
+        apiVersion: "apps/v1",
+        kind: "ReplicaSet",
+        metadata: {
+          name: "order-service-5",
+          namespace: "my-test",
+          ownerReferences: [
+            {
+              apiVersion: "apps.openshift.io/v1",
+              blockOwnerDeletion: true,
+              controller: true,
+              kind: "DeploymentConfig",
+              name: "order-service",
+            }]
+        }
+      })
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service").responseBody({
+        apiVersion: "apps.openshift.io/v1",
+        kind: "DeploymentConfig",
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -370,7 +515,9 @@ describe("NodeDrainService", () => {
           readyReplicas: 1
         }
       })
-      .get("/oapi/v1/namespaces/my-test/deploymentconfigs/order-service").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-test/deploymentconfigs/order-service").responseBody({
+        apiVersion: "apps.openshift.io/v1",
+        kind: "DeploymentConfig",
         metadata: {
           name: "order-service",
           namespace: "my-test"
@@ -383,7 +530,7 @@ describe("NodeDrainService", () => {
           readyReplicas: 2
         }
       })
-      .put("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .put("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -392,7 +539,7 @@ describe("NodeDrainService", () => {
           replicas: 2
         },
       })
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -418,9 +565,11 @@ describe("NodeDrainService", () => {
           spec: {
             replicas: 2
           }
-        }, mockClient.bodyOf("put", "/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
+        }, mockClient.bodyOf("put",
+          "/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
         done();
       } catch (e) {
+        mockClient.dump();
         done(e);
       }
     }, error => done(error));
@@ -429,6 +578,8 @@ describe("NodeDrainService", () => {
   it("Scale down pods after deleted on unschedulable node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01",
         annotations: {}
@@ -438,8 +589,11 @@ describe("NodeDrainService", () => {
       }
     };
     node.metadata.annotations[NodeDrainService.ANNOTATION_NAME] = JSON.stringify({
-      deploymentConfigs: [
+      controllers: [
         {
+          apiVersion: "apps.openshift.io/v1",
+          kind: "DeploymentConfig",
+          resourceName: "deploymentconfigs",
           name: "customer-service",
           namespace: "my-project",
           original: 1,
@@ -462,7 +616,7 @@ describe("NodeDrainService", () => {
             }
           }]
       })
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -485,7 +639,7 @@ describe("NodeDrainService", () => {
           phase: "Complete"
         }
       })
-      .put("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .put("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -494,7 +648,7 @@ describe("NodeDrainService", () => {
           replicas: 1
         },
       })
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"
@@ -520,7 +674,8 @@ describe("NodeDrainService", () => {
           spec: {
             replicas: 1
           }
-        }, mockClient.bodyOf("put", "/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
+        }, mockClient.bodyOf("put",
+          "/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service/scale"));
         done();
       } catch (e) {
         done(e);
@@ -531,6 +686,8 @@ describe("NodeDrainService", () => {
   it("Delete pods after grace period on unschedulable node", (done) => {
     // Arrange
     let node: Node = {
+      apiVersion: "v1",
+      kind: "Node",
       metadata: {
         name: "slave01",
         annotations: {}
@@ -540,8 +697,11 @@ describe("NodeDrainService", () => {
       }
     };
     node.metadata.annotations[NodeDrainService.ANNOTATION_NAME] = JSON.stringify({
-      deploymentConfigs: [
+      controllers: [
         {
+          apiVersion: "apps.openshift.io/v1",
+          kind: "DeploymentConfig",
+          resourceName: "deploymentconfigs",
           name: "customer-service",
           namespace: "my-project",
           original: 1,
@@ -565,7 +725,7 @@ describe("NodeDrainService", () => {
             }
           }]
       })
-      .get("/oapi/v1/namespaces/my-project/deploymentconfigs/customer-service").responseBody({
+      .get("/apis/apps.openshift.io/v1/namespaces/my-project/deploymentconfigs/customer-service").responseBody({
         metadata: {
           name: "customer-service",
           namespace: "my-project"

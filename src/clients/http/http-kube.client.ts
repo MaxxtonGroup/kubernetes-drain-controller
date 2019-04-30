@@ -26,8 +26,14 @@ export class HttpKubeClient extends KubeClient {
    * @param options
    * @returns {Observable<any>}
    */
-  public request<T>(method: string, uri: string, options?: request.CoreOptions): Observable<T> {
+  public request<T>(method: string, uri: string, options?: request.CoreOptions & { cache?: any }): Observable<T> {
     return Observable.create(observer => {
+      if (method.toLowerCase() === "get" && options && options.cache && options.cache[uri] !== undefined) {
+        winston.debug(`${method} ${uri} (cached)`);
+        observer.next(options.cache[uri]);
+        return observer.complete();
+      }
+
       winston.debug(`${method} ${uri}`);
 
       let jsonStream: any = JSONStream();
@@ -47,6 +53,7 @@ export class HttpKubeClient extends KubeClient {
           let error = new Error(
             `${method} ${uri} responded with status ${response.statusCode} ${response.statusMessage}`);
           winston.warn(error.message);
+          winston.warn(body);
           observer.error(error);
         }
       }).on("end", () => {
@@ -57,6 +64,9 @@ export class HttpKubeClient extends KubeClient {
       jsonStream.on("data", object => {
         winston.silly("Response: ", object);
         observer.next(object);
+        if (options && options.cache) {
+          options.cache[uri] = object;
+        }
       }).on("error", (error) => {
         winston.error(`Error ${method} ${uri}`, error);
         observer.error(error);

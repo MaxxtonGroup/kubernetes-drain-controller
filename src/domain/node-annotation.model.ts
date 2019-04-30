@@ -1,8 +1,8 @@
 
-import { DeploymentConfigAnnotation } from "./deploymentconfig-annotation.model";
+import { ControllerAnnotation } from "./controller-annotation.model";
 
 export interface  NodeAnnotation {
 
-  deploymentConfigs?: DeploymentConfigAnnotation[];
+  controllers?: ControllerAnnotation[];
 
 }

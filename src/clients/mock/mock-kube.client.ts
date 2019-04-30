@@ -34,6 +34,8 @@ export class MockKubeClient extends KubeClient {
   }
 
   public request<T>(method: string, uri: string, options?: { watch?: boolean, body?: any }): Observable<T> {
+    // tslint:disable-next-line
+    console.info(`request: ${method} ${uri}`);
     return Observable.create(observer => {
       let matchRequests = this.requestMocks.filter(
         mock => mock.method.toLowerCase() === method.toLowerCase() && mock.uri === uri);
@@ -56,6 +58,11 @@ export class MockKubeClient extends KubeClient {
 
   public bodyOf(method: string, uri: string): any {
     return this.requestBodyHistory[method + " " + uri];
+  }
+
+  public dump() {
+    // tslint:disable-next-line
+    console.info(JSON.stringify(this.requestBodyHistory, undefined, 2));
   }
 
 }

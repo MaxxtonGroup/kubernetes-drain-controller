@@ -1,9 +1,11 @@
 import * as request from "request";
 import { Observable } from "rxjs";
 import { Service } from "typedi";
-import { Watch } from "../domain/kube/api.model";
+import { ApiResource } from "../domain/kube/api-resource.model";
+import { ApiModel, Watch } from "../domain/kube/api.model";
 import { DeploymentConfig } from "../domain/kube/deploymentconfig.model";
 import { Node } from "../domain/kube/node.model";
+import { PodDisruptionBudgetModel } from "../domain/kube/pod-disruption-budget.model";
 import { Pod } from "../domain/kube/pod.model";
 import { ReplicaController } from "../domain/kube/replica-controller.model";
 
@@ -65,7 +67,7 @@ export abstract class KubeClient {
    * @param options
    * @returns {Observable<any>}
    */
-  public abstract request<T>(method: string, uri: string, options?: request.CoreOptions): Observable<T>;
+  public abstract request<T>(method: string, uri: string, options?: request.CoreOptions & {cache?: any}): Observable<T>;
 
   /**
    * Get List of resources
@@ -92,6 +94,32 @@ export abstract class KubeClient {
     o.qs.watch = "true";
     return this.get<Watch<any>>(uri, o)
       .map(watch => watch.object);
+  }
+
+  /**
+   * Find Resource name for kind
+   * @param apiGroup
+   * @param resourceKind
+   * @param cache
+   * @param options
+   */
+  public getResourceNameForKind(apiGroup: string, resourceKind: string, options?: request.CoreOptions & {cache: any}): Observable<string | undefined> {
+    let path = apiGroup === "v1" ? "/api/v1" : `/apis/${apiGroup}`;
+    return this.get<{ resources: ApiResource[] }>(`${path}`, options).map(body => {
+      if (body && body.resources) {
+        let apiResource = body.resources.find(item => item.kind === resourceKind);
+        return apiResource ? apiResource.name : undefined;
+      }
+      return undefined;
+    });
+  }
+
+  /**
+   * Get nodes
+   * @returns {Observable<Node[]>}
+   */
+  public getPodDisruptionBudgets(namespace: string, options?: request.CoreOptions & {cache: any}): Observable<PodDisruptionBudgetModel[]> {
+    return this.getList(`/apis/policy/v1beta1/namespaces/${namespace}/poddisruptionbudgets`, options);
   }
 
   /**
@@ -208,41 +236,13 @@ export abstract class KubeClient {
   }
 
   /**
-   * Scale the replicas of a replica-controller
-   * @param {string} namespace
-   * @param {string} rcName
-   * @param {number} replicas
-   * @returns {Observable<ReplicaController>}
+   * Scale the replicas of a controller
    */
-  public scaleReplicaControllers(namespace: string, rcName: string, replicas: number): Observable<ReplicaController> {
+  public scaleController(apiVersion: string, resourceName: string, namespace: string, name: string, replicas: number): Observable<ApiModel<any, any>> {
     return Observable.create(observer => {
-      let url = `/api/v1/namespaces/${namespace}/replicationcontrollers/${rcName}/scale`;
-      this.get<ReplicaController>(url)
-        .subscribe(rc => {
-          if (!rc.spec) {
-            rc.spec = {};
-          }
-          rc.spec.replicas = replicas;
-          this.put<ReplicaController>(url, rc)
-            .subscribe(rc2 => {
-              observer.next(rc2);
-              observer.complete();
-            }, error => observer.error(error));
-        }, error => observer.error(error));
-    });
-  }
-
-  /**
-   * Scale the replicas of a deployment-config
-   * @param {string} namespace
-   * @param {string} dcName
-   * @param {number} replicas
-   * @returns {Observable<DeploymentConfig>}
-   */
-  public scaleDeploymentConfig(namespace: string, dcName: string, replicas: number): Observable<DeploymentConfig> {
-    return Observable.create(observer => {
-      let url = `/oapi/v1/namespaces/${namespace}/deploymentconfigs/${dcName}/scale`;
-      this.get<DeploymentConfig>(url)
+      let apiGroup = apiVersion === "v1" ? "api" : "apis";
+      let url = `/${apiGroup}/${apiVersion}/namespaces/${namespace}/${resourceName}/${name}/scale`;
+      this.get<ApiModel<any, any>>(url)
         .subscribe(rc => {
           if (!rc.spec) {
             rc.spec = {};

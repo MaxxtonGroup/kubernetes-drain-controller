@@ -3,9 +3,11 @@ import * as winston from "winston";
 import { KubeClient } from "../clients/kube.client";
 import { controller } from "../config/property-keys";
 import { Settings } from "../config/settings";
-import { DeploymentConfigAnnotation } from "../domain/deploymentconfig-annotation.model";
+import { ControllerAnnotation } from "../domain/controller-annotation.model";
+import { ApiModel } from "../domain/kube/api.model";
 import { DeploymentConfig } from "../domain/kube/deploymentconfig.model";
 import { Node } from "../domain/kube/node.model";
+import { PodDisruptionBudgetModel } from "../domain/kube/pod-disruption-budget.model";
 import { Pod } from "../domain/kube/pod.model";
 import { NodeAnnotation } from "../domain/node-annotation.model";
 
@@ -14,7 +16,7 @@ import { NodeAnnotation } from "../domain/node-annotation.model";
  */
 export class NodeDrainService {
 
-  public static readonly ANNOTATION_NAME = "maxxton.com/drain-controller";
+  public static readonly ANNOTATION_NAME = "com.maxxton/drain-controller";
   private readonly POLL_PERIOD: number;
   private readonly GRACE_PERIOD: number;
 
@@ -34,7 +36,7 @@ export class NodeDrainService {
           try {
             await this.processNode(node);
           } catch (e) {
-            winston.error(`Failed to process node ${node.metadata.name}`);
+            winston.error(`Failed to process node ${node.metadata.name}`, e);
           }
         }));
       })().then().catch(e => winston.error(e));
@@ -47,117 +49,133 @@ export class NodeDrainService {
    * @returns {Promise<void>}
    */
   public async processNode(node: Node): Promise<void> {
+    let cache = {};
     if (node.spec.unschedulable) {
       let nodeAnnotation = this.getNodeAnnotation(node);
-      if (!nodeAnnotation.deploymentConfigs) {
-        nodeAnnotation.deploymentConfigs = [];
+      if (!nodeAnnotation.controllers) {
+        nodeAnnotation.controllers = [];
       }
       let pods = await this.getPodsOnNode(node.metadata.name);
 
-      // Get Deployment info per pod
+      // Get Controller info per pod
       await Promise.all(pods.map(async pod => {
-        let deploymentConfig = await this.getDeploymentConfigForPod(pod);
-        if (deploymentConfig) {
-          if (deploymentConfig.spec.replicas === 1) {
-            let dcAnnotation = nodeAnnotation.deploymentConfigs.filter(dc =>
-              dc.namespace === deploymentConfig.metadata.namespace && dc.name === deploymentConfig.metadata.name)[0];
-            if (dcAnnotation) {
-              if (dcAnnotation.pods.indexOf(pod.metadata.name) === -1) {
-                dcAnnotation.pods.push(pod.metadata.name);
+        let podDisruptionBudget = await this.findPodDisruptionBudget(pod, cache);
+        if (podDisruptionBudget && podDisruptionBudget.spec && podDisruptionBudget.spec.minAvailable === 1) {
+
+          let ownerController = await this.findOwnerController(pod, cache);
+          if (ownerController) {
+            let ownerResourceName = await this.kubeClient.getResourceNameForKind(ownerController.apiVersion,
+              ownerController.kind, { cache }).toPromise();
+            // Supported controllers: Deployment and DeploymentConfig
+            if (ownerController.kind === "Deployment" || ownerController.kind === "DeploymentConfig") {
+
+              if (ownerController.spec.replicas === 1) {
+                let controllerAnnotation = nodeAnnotation.controllers.find(controller =>
+                  controller.namespace === ownerController.metadata.namespace && controller.name === ownerController.metadata.name &&
+                  controller.apiVersion === ownerController.apiVersion && controller.kind === ownerController.apiVersion);
+                if (controllerAnnotation) {
+                  if (controllerAnnotation.pods.indexOf(pod.metadata.name) === -1) {
+                    controllerAnnotation.pods.push(pod.metadata.name);
+                  }
+                  controllerAnnotation.current = ownerController.status.readyReplicas;
+                  controllerAnnotation.desired = ownerController.spec.replicas;
+                } else {
+                  controllerAnnotation = {
+                    kind: ownerController.kind,
+                    resourceName: ownerResourceName,
+                    apiVersion: ownerController.apiVersion,
+                    namespace: ownerController.metadata.namespace,
+                    name: ownerController.metadata.name,
+                    pods: [pod.metadata.name],
+                    original: ownerController.spec.replicas,
+                    desired: ownerController.spec.replicas,
+                    current: ownerController.status.readyReplicas
+                  };
+                  nodeAnnotation.controllers.push(controllerAnnotation);
+                }
+              } else {
+                let controllerAnnotation = nodeAnnotation.controllers.find(controller =>
+                  controller.namespace === ownerController.metadata.namespace && controller.name === ownerController.metadata.name &&
+                  controller.apiVersion === ownerController.apiVersion && controller.kind === ownerController.apiVersion);
+                if (controllerAnnotation) {
+                  if (controllerAnnotation.pods.indexOf(pod.metadata.name) === -1) {
+                    controllerAnnotation.pods.push(pod.metadata.name);
+                  }
+                  controllerAnnotation.current = ownerController.status.readyReplicas;
+                  controllerAnnotation.desired = ownerController.spec.replicas;
+                }
               }
-              dcAnnotation.current = deploymentConfig.status.readyReplicas;
-              dcAnnotation.desired = deploymentConfig.spec.replicas;
-            } else {
-              dcAnnotation = {
-                namespace: deploymentConfig.metadata.namespace,
-                name: deploymentConfig.metadata.name,
-                pods: [pod.metadata.name],
-                original: deploymentConfig.spec.replicas,
-                desired: deploymentConfig.spec.replicas,
-                current: deploymentConfig.status.readyReplicas
-              };
-              nodeAnnotation.deploymentConfigs.push(dcAnnotation);
-            }
-          } else {
-            let dcAnnotation = nodeAnnotation.deploymentConfigs.filter(dc =>
-              dc.namespace === deploymentConfig.metadata.namespace && dc.name === deploymentConfig.metadata.name)[0];
-            if (dcAnnotation) {
-              if (dcAnnotation.pods.indexOf(pod.metadata.name) === -1) {
-                dcAnnotation.pods.push(pod.metadata.name);
-              }
-              dcAnnotation.current = deploymentConfig.status.readyReplicas;
-              dcAnnotation.desired = deploymentConfig.spec.replicas;
             }
           }
         }
       }));
       await this.saveAnnotations(node, nodeAnnotation);
 
-      // Process each deployment
-      let removeDcs: DeploymentConfigAnnotation[] = [];
-      await Promise.all(nodeAnnotation.deploymentConfigs.map(async dcAnnotation => {
+      // Process each controller
+      let removeControllers: ControllerAnnotation[] = [];
+      await Promise.all(nodeAnnotation.controllers.map(async controllerAnnotation => {
         // Filter removed pods
-        let podInfos = await Promise.all(dcAnnotation.pods.map(async podName => {
-          let deleted = await this.isPodDeleted(dcAnnotation.namespace, podName);
+        let podInfos = await Promise.all(controllerAnnotation.pods.map(async podName => {
+          let deleted = await this.isPodDeleted(controllerAnnotation.namespace, podName);
           return { podName, deleted };
         }));
         podInfos
           .filter(podInfo => podInfo.deleted)
           .forEach(podInfo => {
-            let index = dcAnnotation.pods.indexOf(podInfo.podName);
+            let index = controllerAnnotation.pods.indexOf(podInfo.podName);
             if (index > -1) {
-              dcAnnotation.pods.splice(index, 1);
+              controllerAnnotation.pods.splice(index, 1);
             }
           });
 
-        if (dcAnnotation.pods.length > 0) {
-          if (!this.isScaled(dcAnnotation)) {
-            await this.scaleUp(dcAnnotation);
+        if (controllerAnnotation.pods.length > 0) {
+          if (!this.isScaled(controllerAnnotation)) {
+            await this.scaleUp(controllerAnnotation);
             await this.saveAnnotations(node, nodeAnnotation);
-          } else if (!this.isReady(dcAnnotation)) {
+          } else if (!this.isReady(controllerAnnotation)) {
             // Do nothing and wait for all pods to be ready
           } else {
             // Register first ready time
-            if (dcAnnotation.readyTime === undefined) {
+            if (controllerAnnotation.readyTime === undefined) {
               winston.info(
-                `${dcAnnotation.namespace}/${dcAnnotation.name} is ready, waiting for old pods to be removed`);
-              dcAnnotation.readyTime = new Date().getTime();
+                `${controllerAnnotation.namespace}/${controllerAnnotation.name} is ready, waiting for old pods to be removed`);
+              controllerAnnotation.readyTime = new Date().getTime();
             }
             await this.saveAnnotations(node, nodeAnnotation);
 
             // Check if the original pods are deleted
-            let toBeDeleted: boolean[] = (await Promise.all(dcAnnotation.pods
-              .map(podName => this.isPodDeleted(dcAnnotation.namespace, podName))))
+            let toBeDeleted: boolean[] = (await Promise.all(controllerAnnotation.pods
+              .map(podName => this.isPodDeleted(controllerAnnotation.namespace, podName))))
               .filter(deleted => !deleted);
             if (toBeDeleted.length > 0) {
               // Wait for pods to be deleted or kill it after a grace period
-              if (this.passedGracePeriod(dcAnnotation)) {
+              if (this.passedGracePeriod(controllerAnnotation)) {
                 await Promise.all(
-                  dcAnnotation.pods.map(podName => this.deletePod(dcAnnotation.namespace, podName)));
+                  controllerAnnotation.pods.map(podName => this.deletePod(controllerAnnotation.namespace, podName)));
               }
             } else {
-              await this.scaleDown(dcAnnotation);
+              await this.scaleDown(controllerAnnotation);
               // Remove annotation for this deployment-config
-              removeDcs.push(dcAnnotation);
+              removeControllers.push(controllerAnnotation);
             }
           }
         } else {
-          await this.scaleDown(dcAnnotation);
+          await this.scaleDown(controllerAnnotation);
           // Remove annotation for this deployment-config
-          removeDcs.push(dcAnnotation);
+          removeControllers.push(controllerAnnotation);
         }
       }));
-      if (removeDcs.length > 0) {
-        removeDcs.forEach(dcAnnotation => {
-          let index = nodeAnnotation.deploymentConfigs.indexOf(dcAnnotation);
+      if (removeControllers.length > 0) {
+        removeControllers.forEach(controllerAnnotation => {
+          let index = nodeAnnotation.controllers.indexOf(controllerAnnotation);
           if (index > -1) {
-            nodeAnnotation.deploymentConfigs.splice(index, 1);
+            nodeAnnotation.controllers.splice(index, 1);
           }
         });
         await this.saveAnnotations(node, nodeAnnotation);
-        if (nodeAnnotation.deploymentConfigs.length > 0) {
+        if (nodeAnnotation.controllers.length > 0) {
           winston.info(
-            `Node ${node.metadata.name} ${nodeAnnotation.deploymentConfigs.length} deployments remaining...`);
+            `Node ${node.metadata.name} ${nodeAnnotation.controllers.length} deployments remaining...`);
         } else {
           winston.info(`Node ${node.metadata.name} is drained!`);
         }
@@ -201,12 +219,12 @@ export class NodeDrainService {
 
   /**
    * Check if pods have passed the grace period
-   * @param {DeploymentConfigAnnotation} dcAnnotation
+   * @param {DeploymentConfigAnnotation} controllerAnnotation
    * @returns {boolean}
    */
-  private passedGracePeriod(dcAnnotation: DeploymentConfigAnnotation): boolean {
-    if (dcAnnotation.readyTime !== undefined) {
-      return new Date().getTime() - this.GRACE_PERIOD > dcAnnotation.readyTime;
+  private passedGracePeriod(controllerAnnotation: ControllerAnnotation): boolean {
+    if (controllerAnnotation.readyTime !== undefined) {
+      return new Date().getTime() - this.GRACE_PERIOD > controllerAnnotation.readyTime;
     }
     return false;
   }
@@ -249,62 +267,101 @@ export class NodeDrainService {
   }
 
   /**
-   * Get Deployment Config for a pod
-   * @param {Pod} pod
-   * @returns {Promise<DeploymentConfig>}
+   * Find Pod disruption budget that matches the pod
+   * @param pod
+   * @param cache
    */
-  private async getDeploymentConfigForPod(pod: Pod): Promise<DeploymentConfig> {
-    if (pod.metadata.annotations && pod.metadata.annotations["openshift.io/deployment-config.name"]) {
-      let dcName = pod.metadata.annotations["openshift.io/deployment-config.name"];
-      try {
-        return await this.kubeClient.getDeploymentConfig(pod.metadata.namespace, dcName).toPromise();
-      } catch (e) {
-        return null;
+  private async findPodDisruptionBudget(pod: Pod, cache: any): Promise<PodDisruptionBudgetModel | undefined> {
+    if (pod && pod.metadata && pod.metadata.labels && pod.metadata.namespace) {
+      let podDisruptionBudgets = await this.kubeClient.getPodDisruptionBudgets(pod.metadata.namespace, { cache })
+        .toPromise();
+      return podDisruptionBudgets.find(podDisruptionBudget => {
+        if (podDisruptionBudget.spec && podDisruptionBudget.spec.selector && podDisruptionBudget.spec.selector.matchLabels) {
+          let match = true;
+          for (let key in podDisruptionBudget.spec.selector.matchLabels) {
+            if (podDisruptionBudget.spec.selector.matchLabels[key]) {
+              let value = podDisruptionBudget.spec.selector.matchLabels[key];
+              if (pod.metadata.labels[key] !== value) {
+                match = false;
+              }
+            }
+          }
+          return match;
+        }
+        return false;
+      });
+    }
+    return undefined;
+  }
+
+  /**
+   * Use ownerReferences to find the controller that manage this resource
+   * @param apiModel
+   */
+  private async findOwnerController(apiModel: ApiModel<any, any>, cache: any): Promise<ApiModel<any, any> | undefined> {
+    if (apiModel && apiModel.metadata && apiModel.metadata.ownerReferences) {
+      let ownerController = apiModel.metadata.ownerReferences.find(ref => ref.controller);
+      if (ownerController) {
+        let resourceName = await this.kubeClient.getResourceNameForKind(ownerController.apiVersion,
+          ownerController.kind, { cache }).toPromise();
+        if (!resourceName) {
+          winston.warn(`Could not find resourceName of ${ownerController.apiVersion} ${ownerController.kind}`);
+          return undefined;
+        }
+        let apiVersion = ownerController.apiVersion === "v1" ? "/api/v1" : `/apis/${ownerController.apiVersion}`;
+        let url = `${apiVersion}/namespaces/${apiModel.metadata.namespace}/${resourceName}/${ownerController.name}`;
+
+        let ownerResource = await this.kubeClient.get(url).toPromise() as any;
+        // Check if the owner has also an owner
+        let superOwnerResource = await this.findOwnerController(ownerResource, cache);
+        return superOwnerResource || ownerResource;
       }
     }
-    return null;
+    return undefined;
   }
 
   /**
    * Check if deployment-config is ready
-   * @param {DeploymentConfigAnnotation} dcAnnotation
+   * @param {DeploymentConfigAnnotation} controllerAnnotation
    * @returns {boolean}
    */
-  private isReady(dcAnnotation: DeploymentConfigAnnotation): boolean {
-    return dcAnnotation.current === dcAnnotation.desired;
+  private isReady(controllerAnnotation: ControllerAnnotation): boolean {
+    return controllerAnnotation.current === controllerAnnotation.desired;
   }
 
   /**
    * Check if deployment-config is scaled
-   * @param {DeploymentConfigAnnotation} dcAnnotation
+   * @param {DeploymentConfigAnnotation} controllerAnnotation
    * @returns {boolean}
    */
-  private isScaled(dcAnnotation: DeploymentConfigAnnotation): boolean {
-    return dcAnnotation.original + 1 === dcAnnotation.desired;
+  private isScaled(controllerAnnotation: ControllerAnnotation): boolean {
+    return controllerAnnotation.original + 1 === controllerAnnotation.desired;
   }
 
   /**
    * Scale up deployment-configs
-   * @param {DeploymentConfigAnnotation} dcAnnotation
+   * @param {DeploymentConfigAnnotation} controllerAnnotation
    * @returns {Promise<DeploymentConfig>}
    */
-  private async scaleUp(dcAnnotation: DeploymentConfigAnnotation): Promise<DeploymentConfig> {
-    dcAnnotation.desired = dcAnnotation.original + 1;
-    winston.info(`Scale up ${dcAnnotation.namespace}/${dcAnnotation.name} to ${dcAnnotation.desired}`);
-    return this.kubeClient.scaleDeploymentConfig(dcAnnotation.namespace, dcAnnotation.name, dcAnnotation.desired)
-      .toPromise();
+  private async scaleUp(controllerAnnotation: ControllerAnnotation): Promise<DeploymentConfig> {
+    controllerAnnotation.desired = controllerAnnotation.original + 1;
+    winston.info(
+      `Scale up ${controllerAnnotation.namespace}/${controllerAnnotation.name} to ${controllerAnnotation.desired}`);
+    return this.kubeClient.scaleController(controllerAnnotation.apiVersion, controllerAnnotation.resourceName,
+      controllerAnnotation.namespace, controllerAnnotation.name, controllerAnnotation.desired).toPromise();
   }
 
   /**
    * Scale down deployment-configs
-   * @param {DeploymentConfigAnnotation} dcAnnotation
+   * @param {DeploymentConfigAnnotation} controllerAnnotation
    * @returns {Promise<DeploymentConfig>}
    */
-  private async scaleDown(dcAnnotation: DeploymentConfigAnnotation): Promise<DeploymentConfig> {
-    dcAnnotation.desired = dcAnnotation.original;
-    winston.info(`Scale down ${dcAnnotation.namespace}/${dcAnnotation.name} to ${dcAnnotation.desired}`);
-    return this.kubeClient.scaleDeploymentConfig(dcAnnotation.namespace, dcAnnotation.name, dcAnnotation.desired)
-      .toPromise();
+  private async scaleDown(controllerAnnotation: ControllerAnnotation): Promise<ApiModel<any, any>> {
+    controllerAnnotation.desired = controllerAnnotation.original;
+    winston.info(
+      `Scale down ${controllerAnnotation.namespace}/${controllerAnnotation.name} to ${controllerAnnotation.desired}`);
+    return this.kubeClient.scaleController(controllerAnnotation.apiVersion, controllerAnnotation.resourceName,
+      controllerAnnotation.namespace, controllerAnnotation.name, controllerAnnotation.desired).toPromise();
   }
 
   /**
@@ -314,15 +371,17 @@ export class NodeDrainService {
    */
   private async scaleDownNode(node: Node): Promise<void> {
     let nodeAnnotation = this.getNodeAnnotation(node);
-    if (nodeAnnotation.deploymentConfigs && nodeAnnotation.deploymentConfigs.length > 0) {
-      let promises = nodeAnnotation.deploymentConfigs
-        .map(dc => {
-          dc.desired = dc.original;
-          winston.info(`Scale down ${dc.namespace}/${dc.name} to ${dc.original}`);
-          return this.kubeClient.scaleDeploymentConfig(dc.namespace, dc.name, dc.original).toPromise();
+    if (nodeAnnotation.controllers && nodeAnnotation.controllers.length > 0) {
+      let promises = nodeAnnotation.controllers
+        .map(controllerAnnotation => {
+          controllerAnnotation.desired = controllerAnnotation.original;
+          winston.info(
+            `Scale down ${controllerAnnotation.kind} ${controllerAnnotation.namespace}/${controllerAnnotation.name} to ${controllerAnnotation.original}`);
+          return this.kubeClient.scaleController(controllerAnnotation.apiVersion, controllerAnnotation.resourceName,
+            controllerAnnotation.namespace, controllerAnnotation.name, controllerAnnotation.original).toPromise();
         });
       await Promise.all(promises);
-      nodeAnnotation.deploymentConfigs = [];
+      nodeAnnotation.controllers = [];
       await this.saveAnnotations(node, nodeAnnotation);
     }
   }

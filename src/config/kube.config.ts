@@ -1,3 +1,4 @@
+import * as atob from "atob";
 import * as fs from "fs";
 import * as jsyaml from "js-yaml";
 import * as os from "os";

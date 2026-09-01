@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "atob": "^2.1.2",
-    "body-parser": "^1.18.2",
+    "body-parser": "^1.20.6",
     "express": "^4.20.0",
     "js-yaml": "^3.15.1",
     "json-stream": "^1.0.0",

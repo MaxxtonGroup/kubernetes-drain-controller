@@ -37,7 +37,7 @@
     "express": "^4.20.0",
     "js-yaml": "^3.15.1",
     "json-stream": "^1.0.0",
-    "multer": "^2.2.0",
+    "multer": "^2.3.0",
     "reflect-metadata": "^0.1.10",
     "request": "^2.83.0",
     "request-promise": "^4.2.2",
